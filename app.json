@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Unicar",
+    "slug": "unicar",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/images/unicar-logo-circular.png",
+    "scheme": "unicar",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#ffffff",
+    "ios": {
+      "icon": "./assets/images/unicar-logo-circular.png",
+      "supportsTablet": true,
+      "bundleIdentifier": "br.edu.ufvjm.unicar"
+    },
+    "android": {
+      "package": "br.edu.ufvjm.unicar",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/images/unicar-logo-circular.png",
+          "imageWidth": 180
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permita que o Unicar use sua localização para mostrar sua posição no mapa da rota."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o Unicar acesse suas fotos para definir a foto de perfil e anexar imagens no chat."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
