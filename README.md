@@ -86,7 +86,16 @@ npx expo lint           # lint (eslint-config-expo)
 
 ## Comandos rápidos — comece aqui
 
-Com o emulador ou o celular conectado (`adb devices`), são dois comandos para o dia a dia:
+Primeiro, inicie o emulador em um terminal separado (ou conecte o celular via USB):
+
+```bash
+$ANDROID_HOME/emulator/emulator -avd Medium_Phone   # deixe esta janela aberta
+adb devices                                        # confirme: aparece como "device"
+```
+
+Se `ANDROID_HOME` não estiver definido, use o caminho completo, por exemplo `~/Android/Sdk/emulator/emulator`. O AVD `Medium_Phone` (API 36) pode ser criado no Device Manager do Android Studio.
+
+Com o dispositivo pronto, são dois comandos para o dia a dia:
 
 ```bash
 npm run android:dev       # desenvolvimento: dependências, APK debug e Metro
@@ -95,6 +104,7 @@ npm run android:release   # APK de release assinado (universal: celular + emulad
 
 | Objetivo | Comando | Resultado |
 | --- | --- | --- |
+| Iniciar o emulador | `$ANDROID_HOME/emulator/emulator -avd Medium_Phone` | janela aberta; `adb devices` mostra `emulator-5554` |
 | Desenvolver com Fast Refresh | `npm run android:dev` | instala o app e deixa o Metro aberto; pressione `r` para recarregar |
 | Escolher dispositivo explicitamente | `npm run android:dev -- --device emulator-5554` | útil com vários dispositivos conectados |
 | APK de release para celular | `npm run android:release:arm64` | `app-release.apk` (~57 MB) |
@@ -117,7 +127,7 @@ O app usa módulos nativos (MapLibre), então Expo Go não funciona. Use o devel
 
 ### 1. Escolher um dispositivo
 
-- Emulador: no Android Studio, abra o Device Manager e crie um `Medium_Phone` com API 36.
+- Emulador: no Android Studio, abra o Device Manager e crie um `Medium_Phone` com API 36. Para iniciar pela linha de comando: `$ANDROID_HOME/emulator/emulator -avd Medium_Phone` (deixe a janela aberta).
 - Aparelho físico: ative as Opções do desenvolvedor, a Depuração USB e a opção "Instalar via USB". Sem isso, o Samsung One UI bloqueia a instalação por USB e mostra o erro `INSTALL_FAILED_USER_RESTRICTED`. Mantenha a tela desbloqueada durante a instalação e toque em "Instalar" quando o diálogo aparecer no celular.
 
 ```bash
