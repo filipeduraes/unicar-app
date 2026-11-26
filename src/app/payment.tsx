@@ -1,62 +1,165 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { Avatar } from "@/components/Avatar";
 import { Icon } from "@/components/Icon";
 import { TopBar } from "@/components/TopBar";
+import { PrimaryButton, SafeNote, SecondaryButton } from "@/components/ui";
 import { Colors, Fonts } from "@/constants/theme";
+import { costSplitFor, fixtureRides } from "@/data";
+import { formatCurrencyBR } from "@/lib/format";
 import { useAppStore, type PaymentState } from "@/store";
-
-const STATUS_INFO: Record<PaymentState, { title: string; text: string; tone: Tone }> = {
-  aguardando: {
-    title: "Aguardando pagamento",
-    text: "Escolha uma forma de pagamento para continuar.",
-    tone: "waiting",
-  },
-  processando: {
-    title: "Pagamento em processamento",
-    text: "Estamos validando a simulação do pagamento.",
-    tone: "processing",
-  },
-  aprovado: {
-    title: "Pagamento aprovado",
-    text: "Seu pagamento de R$ 6,00 foi confirmado.",
-    tone: "paid",
-  },
-  recusado: {
-    title: "Pagamento recusado",
-    text: "Não foi possível aprovar. Escolha outra forma de pagamento.",
-    tone: "refused",
-  },
-  reembolso: {
-    title: "Reembolso solicitado",
-    text: "A solicitação está em análise para esta ocorrência.",
-    tone: "refund",
-  },
-  reembolsado: {
-    title: "Pagamento reembolsado",
-    text: "R$ 6,00 foi devolvido pelo método de pagamento.",
-    tone: "paid",
-  },
-};
 
 type Tone = "waiting" | "processing" | "paid" | "refused" | "refund";
 
+const PROCESSING_DELAY_MS = 1800;
+
+function statusInfo(
+  status: PaymentState,
+  amount: string,
+): { title: string; text: string; tone: Tone } {
+  switch (status) {
+    case "processando":
+      return {
+        title: "Processando pagamento",
+        text: "Estamos validando a simulação do pagamento. Isso leva só alguns segundos.",
+        tone: "processing",
+      };
+    case "aprovado":
+      return {
+        title: "Pagamento aprovado",
+        text: `Seu pagamento de ${amount} foi confirmado.`,
+        tone: "paid",
+      };
+    case "recusado":
+      return {
+        title: "Pagamento recusado",
+        text: "Não foi possível aprovar. Escolha outra forma de pagamento.",
+        tone: "refused",
+      };
+    case "reembolso":
+      return {
+        title: "Reembolso solicitado",
+        text: "A solicitação está em análise para esta ocorrência.",
+        tone: "refund",
+      };
+    case "reembolsado":
+      return {
+        title: "Pagamento reembolsado",
+        text: `${amount} foi devolvido pelo método de pagamento.`,
+        tone: "paid",
+      };
+    default:
+      return {
+        title: "Aguardando pagamento",
+        text: "Escolha uma forma de pagamento para continuar.",
+        tone: "waiting",
+      };
+  }
+}
+
 export default function PaymentScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string; from?: string }>();
+  const rideId = Number(params.id ?? 1);
   const { state, setPayment } = useAppStore();
-  const [method, setMethod] = useState<"pix" | "card">(state.paymentMethods?.["ride-1"] || "pix");
-  const status = (state.payments["ride-1"] || "aguardando") as PaymentState;
-  const setStatus = (next: PaymentState) => setPayment(1, next, method);
-  const info = STATUS_INFO[status];
+
+  const ride =
+    state.rides.find((item) => item.id === rideId) ||
+    fixtureRides.find((item) => item.id === rideId) ||
+    fixtureRides[0];
+  const key = `ride-${ride.id}`;
+  const split = costSplitFor(ride, state.profile.id);
+  const amount = formatCurrencyBR(split.perPerson);
+  const driverFirstName = ride.driver.name.split(" ")[0];
+
+  const [method, setMethod] = useState<"pix" | "card">(state.paymentMethods?.[key] || "pix");
+  const status = (state.payments[key] || "aguardando") as PaymentState;
+  const setStatus = (next: PaymentState) => setPayment(ride.id, next, method);
+  const info = statusInfo(status, amount);
+
+  // Simulação: o "processamento" conclui sozinho depois de alguns segundos.
+  useEffect(() => {
+    if (status !== "processando") return;
+    const timer = setTimeout(() => setPayment(ride.id, "aprovado", method), PROCESSING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [status, ride.id, method, setPayment]);
+
+  const goBackToRide = () => {
+    if (params.from === "ride" && router.canGoBack()) router.back();
+    else router.replace({ pathname: "/ride/[id]", params: { id: String(ride.id) } });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.surface }}>
-      <TopBar title="Pagamento" subtitle="CARONA COM MARINA" onBack={() => router.back()} />
+      <TopBar
+        title="Pagamento"
+        subtitle={`CARONA COM ${driverFirstName.toUpperCase()}`}
+        onBack={goBackToRide}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 14 }}
       >
+        <View style={styles.rideCard}>
+          <View style={styles.rideDriver}>
+            <Avatar person={ride.driver} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rideEyebrow}>MOTORISTA</Text>
+              <Text style={styles.rideDriverName} numberOfLines={1}>
+                {ride.driver.name}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.rideRow}>
+            <Icon name="pin" size={18} color={Colors.muted} />
+            <Text style={styles.rideRowText} numberOfLines={2}>
+              {ride.from} → {ride.to}
+            </Text>
+          </View>
+          <View style={styles.rideRow}>
+            <Icon name="calendar" size={18} color={Colors.muted} />
+            <Text style={styles.rideRowText} numberOfLines={1}>
+              {ride.days}
+            </Text>
+          </View>
+          <View style={styles.rideRow}>
+            <Icon name="clock" size={18} color={Colors.muted} />
+            <Text style={styles.rideRowText} numberOfLines={1}>
+              Saída {ride.time} · chegada {ride.arrive}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.splitCard}>
+          <Text style={styles.sectionLabel}>Divisão de custos</Text>
+          <View style={styles.splitRow}>
+            <Text style={styles.splitLabel}>Custo total estimado (combustível)</Text>
+            <Text style={styles.splitValue} numberOfLines={1}>
+              {formatCurrencyBR(split.total)}
+            </Text>
+          </View>
+          <View style={styles.splitRow}>
+            <Text style={styles.splitLabel}>Pessoas no carro</Text>
+            <Text style={styles.splitValue} numberOfLines={1}>
+              {split.people}
+            </Text>
+          </View>
+          <Text style={styles.splitHint}>
+            Motorista + {split.people - 1} passageiro{split.people - 1 === 1 ? "" : "s"}, incluindo
+            você. O valor é dividido igualmente.
+          </Text>
+          <View style={styles.splitDivider} />
+          <View style={[styles.splitRow, { alignItems: "flex-end" }]}>
+            <Text style={styles.splitLabelStrong}>Sua parte</Text>
+            <Text numberOfLines={1}>
+              <Text style={styles.perPersonValue}>{amount}</Text>
+              <Text style={styles.perPersonSuffix}> por pessoa</Text>
+            </Text>
+          </View>
+        </View>
+
         {status !== "aguardando" ? (
           <View style={styles.stateContainer}>
             <View style={[styles.stateIcon, toneStyle(info.tone)]}>
@@ -72,17 +175,16 @@ export default function PaymentScreen() {
                 color={toneIcon(info.tone)}
               />
             </View>
-            <View style={[styles.statusPill, toneStyle(info.tone)]}>
-              <Text style={[styles.statusPillText, { color: toneIcon(info.tone) }]}>
-                {info.title}
-              </Text>
-            </View>
             <Text style={styles.stateTitle}>{info.title}</Text>
             <Text style={styles.stateText}>{info.text}</Text>
             <View style={styles.receipt}>
               <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Destinatária</Text>
-                <Text style={styles.receiptValue}>Marina Lopes</Text>
+                <Text style={styles.receiptLabel}>Para</Text>
+                <Text style={styles.receiptValue}>{ride.driver.name}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Valor</Text>
+                <Text style={styles.receiptValue}>{amount} por pessoa</Text>
               </View>
               <View style={styles.receiptRow}>
                 <Text style={styles.receiptLabel}>Forma</Text>
@@ -91,67 +193,56 @@ export default function PaymentScreen() {
                 </Text>
               </View>
               <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Data</Text>
-                <Text style={styles.receiptValue}>21 mai, 10:38</Text>
-              </View>
-              <View style={styles.receiptRow}>
                 <Text style={styles.receiptLabel}>Status</Text>
                 <Text style={styles.receiptValue}>{info.title}</Text>
               </View>
             </View>
             {status === "processando" && (
-              <Pressable
-                onPress={() => setStatus("aprovado")}
-                accessibilityRole="button"
-                style={styles.primaryCta}
-              >
-                <Text style={styles.ctaTextWhite}>Concluir processamento</Text>
-              </Pressable>
+              <PrimaryButton
+                title="Processando"
+                loading
+                onPress={() => {}}
+                style={{ alignSelf: "stretch" }}
+              />
             )}
             {status === "recusado" && (
-              <Pressable
+              <PrimaryButton
+                title="Tentar outra forma"
                 onPress={() => setStatus("aguardando")}
-                accessibilityRole="button"
-                style={styles.primaryCta}
-              >
-                <Text style={styles.ctaTextWhite}>Tentar outra forma</Text>
-              </Pressable>
+                style={{ alignSelf: "stretch" }}
+              />
             )}
             {status === "aprovado" && (
-              <Pressable
-                onPress={() => setStatus("reembolso")}
-                accessibilityRole="button"
-                style={styles.secondaryCta}
-              >
-                <Text style={styles.secondaryCtaText}>Solicitar reembolso</Text>
-              </Pressable>
+              <>
+                <PrimaryButton
+                  title="Voltar para a carona"
+                  onPress={goBackToRide}
+                  style={{ alignSelf: "stretch" }}
+                />
+                <SecondaryButton
+                  title="Solicitar reembolso"
+                  onPress={() => setStatus("reembolso")}
+                  style={{ alignSelf: "stretch" }}
+                />
+              </>
             )}
             {status === "reembolso" && (
-              <Pressable
+              <PrimaryButton
+                title="Simular aprovação do reembolso"
                 onPress={() => setStatus("reembolsado")}
-                accessibilityRole="button"
-                style={styles.primaryCta}
-              >
-                <Text style={styles.ctaTextWhite}>Simular aprovação do reembolso</Text>
-              </Pressable>
+                style={{ alignSelf: "stretch" }}
+              />
             )}
             {status === "reembolsado" && (
-              <Pressable
-                onPress={() => router.back()}
-                accessibilityRole="button"
-                style={styles.primaryCta}
-              >
-                <Text style={styles.ctaTextWhite}>Concluir</Text>
-              </Pressable>
+              <PrimaryButton
+                title="Concluir"
+                onPress={goBackToRide}
+                style={{ alignSelf: "stretch" }}
+              />
             )}
           </View>
         ) : (
           <>
-            <View style={styles.totalCard}>
-              <Text style={styles.totalLabel}>Total da carona</Text>
-              <Text style={styles.totalValue}>R$ 6,00</Text>
-              <Text style={styles.totalSub}>Campus JK · quarta, 07:10</Text>
-            </View>
             <Text style={styles.sectionLabel}>Como você quer pagar?</Text>
             <Pressable
               onPress={() => setMethod("pix")}
@@ -168,7 +259,7 @@ export default function PaymentScreen() {
               </View>
               {method === "pix" && (
                 <View style={styles.methodCheck}>
-                  <Icon name="check" size={14} color="#ffffff" />
+                  <Icon name="check" size={14} color={Colors.surface} />
                 </View>
               )}
             </Pressable>
@@ -187,23 +278,15 @@ export default function PaymentScreen() {
               </View>
               {method === "card" && (
                 <View style={styles.methodCheck}>
-                  <Icon name="check" size={14} color="#ffffff" />
+                  <Icon name="check" size={14} color={Colors.surface} />
                 </View>
               )}
             </Pressable>
-            <View style={styles.safeNote}>
-              <Icon name="shield" size={18} color={Colors.brand} />
-              <Text style={styles.safeNoteText}>
-                Pagamento simulado e protegido. Nenhuma cobrança real será feita.
-              </Text>
-            </View>
-            <Pressable
+            <SafeNote text="Pagamento simulado e protegido. Nenhuma cobrança real será feita." />
+            <PrimaryButton
+              title={`Confirmar pagamento · ${amount}`}
               onPress={() => setStatus("processando")}
-              accessibilityRole="button"
-              style={styles.primaryCta}
-            >
-              <Text style={styles.ctaTextWhite}>Pagar R$ 6,00</Text>
-            </Pressable>
+            />
             <Pressable
               onPress={() => setStatus("recusado")}
               accessibilityRole="button"
@@ -249,7 +332,43 @@ function toneIcon(tone: Tone) {
 }
 
 const styles = {
-  stateContainer: { alignItems: "center" as const, gap: 10, paddingTop: 16 },
+  rideCard: {
+    borderWidth: 1,
+    borderColor: Colors.canvas,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  rideDriver: { flexDirection: "row" as const, alignItems: "center" as const, gap: 12 },
+  rideEyebrow: {
+    color: Colors.muted,
+    fontFamily: Fonts.bodyBold,
+    fontSize: 11,
+    letterSpacing: 1.4,
+  },
+  rideDriverName: { fontFamily: Fonts.bodyBold, fontSize: 16, color: Colors.ink },
+  rideRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10 },
+  rideRowText: { flex: 1, color: Colors.ink, fontSize: 14, fontFamily: Fonts.body },
+  splitCard: {
+    backgroundColor: Colors.graySoft,
+    borderRadius: 18,
+    padding: 16,
+    gap: 8,
+  },
+  splitRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    gap: 12,
+  },
+  splitLabel: { flex: 1, color: Colors.muted, fontSize: 14, fontFamily: Fonts.body },
+  splitLabelStrong: { flex: 1, color: Colors.ink, fontSize: 15, fontFamily: Fonts.bodyBold },
+  splitValue: { color: Colors.ink, fontSize: 15, fontFamily: Fonts.bodyBold },
+  splitHint: { color: Colors.muted, fontSize: 12, lineHeight: 17, fontFamily: Fonts.body },
+  splitDivider: { height: 1, backgroundColor: Colors.canvas, marginVertical: 2 },
+  perPersonValue: { fontFamily: Fonts.displayExtraBold, fontSize: 26, color: Colors.ink },
+  perPersonSuffix: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: Colors.muted },
+  stateContainer: { alignItems: "center" as const, gap: 10, paddingTop: 8 },
   stateIcon: {
     width: 76,
     height: 76,
@@ -258,12 +377,6 @@ const styles = {
     justifyContent: "center" as const,
     marginBottom: 4,
   },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  statusPillText: { fontFamily: Fonts.bodyBold, fontSize: 13 },
   stateTitle: {
     fontFamily: Fonts.displayExtraBold,
     fontSize: 22,
@@ -290,35 +403,6 @@ const styles = {
   receiptRow: { flexDirection: "row" as const, justifyContent: "space-between" as const, gap: 12 },
   receiptLabel: { color: Colors.muted, fontSize: 14, fontFamily: Fonts.body },
   receiptValue: { color: Colors.ink, fontSize: 14, fontFamily: Fonts.bodyBold },
-  primaryCta: {
-    alignSelf: "stretch" as const,
-    minHeight: 56,
-    borderRadius: 15,
-    backgroundColor: Colors.brand,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  ctaTextWhite: { color: "#ffffff", fontFamily: Fonts.bodyBold, fontSize: 16 },
-  secondaryCta: {
-    alignSelf: "stretch" as const,
-    minHeight: 54,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: Colors.canvas,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  secondaryCtaText: { color: Colors.ink, fontFamily: Fonts.bodyBold, fontSize: 16 },
-  totalCard: {
-    backgroundColor: Colors.graySoft,
-    borderRadius: 18,
-    padding: 18,
-    alignItems: "center" as const,
-    gap: 2,
-  },
-  totalLabel: { color: Colors.muted, fontSize: 13, fontFamily: Fonts.body },
-  totalValue: { fontFamily: Fonts.displayExtraBold, fontSize: 34, color: Colors.ink },
-  totalSub: { color: Colors.muted, fontSize: 12, fontFamily: Fonts.body },
   sectionLabel: { fontFamily: Fonts.bodyBold, fontSize: 16, color: Colors.ink },
   methodCard: {
     flexDirection: "row" as const,
@@ -351,14 +435,5 @@ const styles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
-  safeNote: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 10,
-    backgroundColor: Colors.blueSoft,
-    borderRadius: 12,
-    padding: 12,
-  },
-  safeNoteText: { flex: 1, color: Colors.ink, fontSize: 13, lineHeight: 18, fontFamily: Fonts.body },
   simulateRefusal: { color: Colors.error, fontFamily: Fonts.bodySemiBold, fontSize: 14 },
 };

@@ -52,3 +52,9 @@ export function formatWeekdayShortDateBR(date: Date): string {
 export function formatWeekdayLongBR(date: Date): string {
   return WEEKDAYS_LONG[date.getDay()];
 }
+
+/** 6 → "R$ 6,00" (sem Intl, compatível com Hermes) */
+export function formatCurrencyBR(value: number): string {
+  const [integer, cents] = value.toFixed(2).split(".");
+  return `R$ ${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
+}

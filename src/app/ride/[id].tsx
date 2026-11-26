@@ -10,7 +10,8 @@ import { MapView } from "@/components/MapView";
 import { Stars } from "@/components/Stars";
 import { PendingButton, PrimaryButton, SecondaryButton } from "@/components/ui";
 import { Colors, Fonts } from "@/constants/theme";
-import { coordinatesForPickup, coordinatesForPlace, fixtureRides } from "@/data";
+import { coordinatesForPickup, coordinatesForPlace, costSplitFor, fixtureRides } from "@/data";
+import { formatCurrencyBR } from "@/lib/format";
 import { useAppStore } from "@/store";
 
 export default function RideDetailsScreen() {
@@ -53,6 +54,7 @@ export default function RideDetailsScreen() {
   const [waitlisted, setWaitlisted] = useState(false);
   const [showDriverProfile, setShowDriverProfile] = useState(false);
   const isFull = ride.id === 2;
+  const split = costSplitFor(ride, state.profile.id);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.surface }}>
@@ -206,6 +208,27 @@ export default function RideDetailsScreen() {
                 <Text style={styles.muted}>Seja a primeira pessoa nesta carona.</Text>
               )}
             </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>Pagamento</Text>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/payment",
+                    params: { id: String(ride.id), from: "ride" },
+                  })
+                }
+                accessibilityRole="button"
+              >
+                <Text style={styles.sectionAction}>Ver divisão e pagar</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.noteText}>
+              {formatCurrencyBR(split.total)} de combustível dividido entre {split.people} pessoas:{" "}
+              {formatCurrencyBR(split.perPerson)} por pessoa.
+            </Text>
           </View>
 
           <View style={styles.section}>

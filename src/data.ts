@@ -124,3 +124,24 @@ export const coordinatesForPickup = (personId: number, index: number): Coordinat
   return known[personId] || [-43.594 + index * 0.002, -18.231 + index * 0.003];
 };
 
+
+export type CostSplit = {
+  /** custo estimado de combustível da viagem inteira */
+  total: number;
+  /** motorista + passageiros já confirmados + você */
+  people: number;
+  perPerson: number;
+};
+
+/**
+ * Divisão simulada do combustível: o valor anunciado da carona é a cota de cada
+ * pessoa no carro, então o custo total é a cota multiplicada pelo número de pessoas.
+ */
+export function costSplitFor(
+  ride: { price: number; passengers: { id: number }[] },
+  passengerId: number,
+): CostSplit {
+  const alreadyIn = ride.passengers.some((person) => person.id === passengerId);
+  const people = 1 + ride.passengers.length + (alreadyIn ? 0 : 1);
+  return { total: ride.price * people, people, perPerson: ride.price };
+}
