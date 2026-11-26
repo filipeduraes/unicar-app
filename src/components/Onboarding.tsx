@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,24 +15,136 @@ import { Image } from "expo-image";
 
 import { Avatar } from "@/components/Avatar";
 import { BottomSheet } from "@/components/BottomSheet";
+import { CoursePicker } from "@/components/CoursePicker";
 import { Icon } from "@/components/Icon";
 import { FormGroup, InputShell, ShellInput } from "@/components/Field";
 import { PrimaryButton, SafeNote } from "@/components/ui";
 import { Colors, Fonts } from "@/constants/theme";
-import { riders } from "@/data";
+import { campusForCourse, riders } from "@/data";
 import { useAuth } from "@/auth";
+import { initialsFromName, nameFromEmail } from "@/lib/profile";
+import { useAppStore } from "@/store";
 
 const logoCircular = require("@/assets/images/unicar-logo-circular.png");
 const logoTransparent = require("@/assets/images/unicar-logo-transparent.png");
 
+const INSTITUTIONAL_DOMAIN = "@ufvjm.edu.br";
+const CODE_LENGTH = 4;
+const RESEND_COOLDOWN_SECONDS = 42;
+
+const emptyCode = () => Array<string>(CODE_LENGTH).fill("");
+const generateCode = (previous = "") => {
+  let code = "";
+  do {
+    code = Array.from({ length: CODE_LENGTH }, () => Math.floor(Math.random() * 10)).join("");
+  } while (code === previous);
+  return code;
+};
+const formatCountdown = (seconds: number) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+
 export function Onboarding() {
   const { login } = useAuth();
+  const { hydrated, updateProfile } = useAppStore();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState("");
   const [showTerms, setShowTerms] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeDigits, setCodeDigits] = useState<string[]>(emptyCode);
+  const [codeError, setCodeError] = useState("");
+  const [codeNotice, setCodeNotice] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const codeInputs = useRef<(TextInput | null)[]>([]);
+
   const normalizedEmail = email.trim().toLowerCase();
-  const valid = normalizedEmail.endsWith("@ufvjm.edu.br");
+  const localIdentifier = normalizedEmail.split("@")[0] ?? "";
+  const valid =
+    normalizedEmail.endsWith(INSTITUTIONAL_DOMAIN) && localIdentifier.length > 0;
+  const generatedName = nameFromEmail(normalizedEmail);
+  const firstName = generatedName.split(" ")[0] || "Estudante";
+  const selectedCampus = campusForCourse(selectedCourse);
+  const countdownRunning = secondsLeft > 0;
+
+  useEffect(() => {
+    if (!countdownRunning) return;
+    const timer = setInterval(() => {
+      setSecondsLeft((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdownRunning]);
+
+  const sendCode = (toEmail: string) => {
+    const code = generateCode();
+    setVerificationCode(code);
+    setCodeDigits(emptyCode());
+    setCodeError("");
+    setCodeNotice(`Código enviado a ${toEmail} (simulação): ${code}`);
+    setSecondsLeft(RESEND_COOLDOWN_SECONDS);
+    setStep(2);
+  };
+
+  const handleResend = () => {
+    if (secondsLeft > 0) return;
+    const code = generateCode(verificationCode);
+    setVerificationCode(code);
+    setCodeDigits(emptyCode());
+    setCodeError("");
+    setCodeNotice(`Novo código enviado a ${email} (simulação): ${code}`);
+    setSecondsLeft(RESEND_COOLDOWN_SECONDS);
+  };
+
+  const handleAutofill = () => {
+    if (!verificationCode) return;
+    setCodeDigits(verificationCode.split(""));
+    setCodeError("");
+    setCodeNotice("Código recebido e preenchido automaticamente (simulação).");
+  };
+
+  const handleDigitChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    setCodeDigits((current) => {
+      const next = [...current];
+      next[index] = digit;
+      return next;
+    });
+    setCodeError("");
+    if (digit && index < CODE_LENGTH - 1) codeInputs.current[index + 1]?.focus();
+  };
+
+  const handleDigitBackspace = (index: number, key: string) => {
+    if (key === "Backspace" && !codeDigits[index] && index > 0) {
+      codeInputs.current[index - 1]?.focus();
+    }
+  };
+
+  const verifyCode = () => {
+    const entered = codeDigits.join("");
+    if (entered.length !== CODE_LENGTH) {
+      setCodeError("Digite os 4 dígitos do código enviado.");
+      return;
+    }
+    if (entered !== verificationCode) {
+      setCodeError("Código incorreto. Confira o código simulado e tente novamente.");
+      return;
+    }
+    setCodeError("");
+    setCodeNotice("");
+    setSecondsLeft(0);
+    setStep(3);
+  };
+
+  const confirmProfile = () => {
+    if (!hydrated || !selectedCourse) return;
+    updateProfile({
+      name: generatedName,
+      initials: initialsFromName(generatedName),
+      email: normalizedEmail,
+      course: selectedCourse,
+    });
+    login();
+  };
 
   return (
     <LinearGradient colors={["#ffffff", "#ffffff", "#eaf4ff"]} style={styles.container}>
@@ -145,7 +258,7 @@ export function Onboarding() {
                 </InputShell>
                 {email && !valid ? (
                   <Text accessibilityLiveRegion="polite" style={styles.errorText}>
-                    Use um e-mail terminado em @ufvjm.edu.br
+                    Use um e-mail terminado em {INSTITUTIONAL_DOMAIN}
                   </Text>
                 ) : null}
               </FormGroup>
@@ -154,7 +267,7 @@ export function Onboarding() {
                 disabled={!valid}
                 onPress={() => {
                   setEmail(normalizedEmail);
-                  setStep(2);
+                  sendCode(normalizedEmail);
                 }}
                 style={{ marginTop: 4 }}
               />
@@ -165,7 +278,10 @@ export function Onboarding() {
           {step === 2 && (
             <View style={styles.panel}>
               <Pressable
-                onPress={() => setStep(1)}
+                onPress={() => {
+                  setSecondsLeft(0);
+                  setStep(1);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel="Voltar"
                 style={styles.backFloat}
@@ -180,15 +296,57 @@ export function Onboarding() {
               <Text style={styles.panelText}>
                 Enviamos um código para <Text style={{ fontFamily: Fonts.bodyBold }}>{email}</Text>
               </Text>
-              <View style={styles.codeRow} accessibilityLabel="Código de verificação 4 8 2 6">
-                {["4", "8", "2", "6"].map((digit, index) => (
-                  <View key={index} style={styles.codeCell}>
-                    <Text style={styles.codeDigit}>{digit}</Text>
-                  </View>
+              <View style={styles.codeRow} accessibilityLabel="Código de verificação">
+                {codeDigits.map((digit, index) => (
+                  <TextInput
+                    key={index}
+                    ref={(input) => {
+                      codeInputs.current[index] = input;
+                    }}
+                    value={digit}
+                    onChangeText={(value) => handleDigitChange(index, value)}
+                    onKeyPress={(event) => handleDigitBackspace(index, event.nativeEvent.key)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    selectTextOnFocus
+                    autoCorrect={false}
+                    accessibilityLabel={`Dígito ${index + 1} do código`}
+                    style={styles.codeCell}
+                  />
                 ))}
               </View>
-              <Text style={styles.resend}>Reenviar código em 00:42</Text>
-              <PrimaryButton title="Verificar código" onPress={() => setStep(3)} />
+              {codeNotice ? (
+                <Text accessibilityLiveRegion="polite" style={styles.codeNotice}>
+                  {codeNotice}
+                </Text>
+              ) : null}
+              {codeError ? (
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+                  {codeError}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={handleAutofill}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.simulateRow, pressed && styles.pressed]}
+              >
+                <Icon name="chat" size={17} color={Colors.brand} />
+                <Text style={styles.simulateText}>Simular recebimento do código</Text>
+              </Pressable>
+              {countdownRunning ? (
+                <Text accessibilityLiveRegion="polite" style={styles.resend}>
+                  Reenviar código em {formatCountdown(secondsLeft)}
+                </Text>
+              ) : (
+                <Pressable
+                  onPress={handleResend}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.resend, pressed && styles.pressed]}
+                >
+                  <Text style={styles.resendLink}>Reenviar código</Text>
+                </Pressable>
+              )}
+              <PrimaryButton title="Verificar código" onPress={verifyCode} />
             </View>
           )}
 
@@ -198,29 +356,44 @@ export function Onboarding() {
                 <Icon name="check" size={36} color={Colors.brand} />
               </View>
               <Text style={styles.eyebrow}>PERFIL ENCONTRADO</Text>
-              <Text style={styles.verifiedTitle}>Olá, Gabriel!</Text>
+              <Text style={styles.verifiedTitle}>Olá, {firstName}!</Text>
               <Text style={styles.panelText}>
-                Encontramos seus dados institucionais. Confirme para continuar.
+                Encontramos seus dados institucionais. Confirme seu curso para continuar.
               </Text>
               <View style={styles.institutionalProfile}>
                 <Avatar
                   person={{
-                    name: "Gabriel Rocha",
-                    initials: "GR",
+                    name: generatedName,
+                    initials: initialsFromName(generatedName),
                     color: "green",
                   }}
                   size="xl"
                 />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.profileName}>Gabriel Rocha</Text>
-                  <Text style={styles.profileCourse}>Engenharia de Computação</Text>
-                  <Text style={styles.profileMeta}>Campus JK · Matrícula ativa</Text>
+                  <Text style={styles.profileName} numberOfLines={1}>
+                    {generatedName}
+                  </Text>
+                  <Text style={styles.profileCourse} numberOfLines={1}>
+                    {selectedCourse || "Selecione seu curso"}
+                  </Text>
+                  <Text style={styles.profileMeta}>
+                    {selectedCampus ? `Campus ${selectedCampus} · Matrícula ativa` : "Campus a definir"}
+                  </Text>
                 </View>
                 <View style={styles.profileCheck}>
                   <Icon name="check" size={14} color={Colors.brand} />
                 </View>
               </View>
-              <PrimaryButton title="Confirmar e continuar" onPress={login} style={{ marginTop: 16 }} />
+              <View style={styles.courseField}>
+                <Text style={styles.fieldLabel}>Curso</Text>
+                <CoursePicker value={selectedCourse} onChange={setSelectedCourse} />
+              </View>
+              <PrimaryButton
+                title="Confirmar e continuar"
+                onPress={confirmProfile}
+                disabled={!selectedCourse || !hydrated}
+                style={{ marginTop: 16 }}
+              />
             </View>
           )}
         </ScrollView>
@@ -411,28 +584,46 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontFamily: Fonts.body,
   },
-  codeRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  codeRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
   codeCell: {
-    width: 62,
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 62,
     height: 65,
     borderWidth: 1.5,
     borderColor: Colors.brand,
-    backgroundColor: "#ffffff",
+    backgroundColor: Colors.surface,
     borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  codeDigit: {
+    textAlign: "center",
     fontFamily: Fonts.displayExtraBold,
     fontSize: 25,
     color: Colors.ink,
+    paddingVertical: 0,
   },
+  codeNotice: {
+    color: Colors.brand,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Fonts.bodySemiBold,
+    marginBottom: 4,
+  },
+  simulateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  simulateText: { color: Colors.brand, fontSize: 14, fontFamily: Fonts.bodySemiBold },
+  pressed: { opacity: 0.7 },
   resend: {
     color: Colors.muted,
     fontSize: 15,
     marginBottom: 16,
     fontFamily: Fonts.body,
   },
+  resendLink: { color: Colors.brand, fontSize: 15, fontFamily: Fonts.bodySemiBold },
+  courseField: { width: "100%", marginTop: 4 },
   successRing: {
     width: 72,
     height: 72,

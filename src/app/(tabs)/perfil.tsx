@@ -5,12 +5,15 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
 import { BottomSheet } from "@/components/BottomSheet";
+import { CoursePicker } from "@/components/CoursePicker";
 import { Icon, type IconName } from "@/components/Icon";
 import { Stars } from "@/components/Stars";
 import { TopBar } from "@/components/TopBar";
 import { InputShell, ShellInput } from "@/components/Field";
 import { Toggle } from "@/components/ui";
 import { Colors, Fonts } from "@/constants/theme";
+import { campusForCourse } from "@/data";
+import { initialsFromName } from "@/lib/profile";
 import { useAuth } from "@/auth";
 import { useAppStore } from "@/store";
 
@@ -32,6 +35,7 @@ export default function ProfileScreen() {
   const [draftName, setDraftName] = useState(me.name);
   const [draftCourse, setDraftCourse] = useState(me.course);
   const [draftAddress, setDraftAddress] = useState(me.address);
+  const draftCampus = campusForCourse(draftCourse);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -52,7 +56,14 @@ export default function ProfileScreen() {
 
   const menuItems: { icon: IconName; label: string; onPress: () => void }[] = [
     { icon: "user", label: "Avaliações recebidas", onPress: () => setPanel("reviews") },
-    { icon: "pin", label: "Endereços salvos", onPress: () => setPanel("addresses") },
+    {
+      icon: "pin",
+      label: "Endereços salvos",
+      onPress: () => {
+        setDraftAddress(me.address);
+        setPanel("addresses");
+      },
+    },
     { icon: "card", label: "Pagamentos", onPress: () => router.push("/payment") },
     {
       icon: "shield",
@@ -74,6 +85,7 @@ export default function ProfileScreen() {
             onPress={() => {
               setDraftName(me.name);
               setDraftCourse(me.course);
+              setDraftAddress(me.address);
               setPanel("edit");
             }}
             accessibilityRole="button"
@@ -93,8 +105,8 @@ export default function ProfileScreen() {
             <Avatar person={me} size="xl" />
             <View style={styles.onlineDot} />
           </View>
-          <Text style={styles.heroName}>{me.name}</Text>
-          <Text style={styles.heroCourse}>{me.course}</Text>
+          <Text style={styles.heroName}>{me.name || "Estudante"}</Text>
+          <Text style={styles.heroCourse}>{me.course || "Curso não informado"}</Text>
           <View style={styles.verifiedPill}>
             <Icon name="shield" size={15} color={Colors.brand} />
             <Text style={styles.verifiedText}>Perfil institucional verificado</Text>
@@ -103,8 +115,8 @@ export default function ProfileScreen() {
 
         <View style={styles.reputationCard}>
           <View style={styles.reputationItem}>
-            <Text style={styles.reputationValue}>4,9</Text>
-            <Stars value={4.9} compact />
+            <Text style={styles.reputationValue}>{me.rating.toFixed(1).replace(".", ",")}</Text>
+            <Stars value={me.rating} compact />
             <Text style={styles.reputationLabel}>32 avaliações</Text>
           </View>
           <View style={styles.reputationDivider} />
@@ -126,7 +138,9 @@ export default function ProfileScreen() {
               <Icon name="pin" size={18} color={Colors.muted} />
               <Text style={styles.dataLabelText}>Campus</Text>
             </View>
-            <Text style={styles.dataValue}>Campus {me.campus}</Text>
+            <Text style={styles.dataValue}>
+              {me.campus ? `Campus ${me.campus}` : "Não informado"}
+            </Text>
           </View>
           <View style={styles.dataRow}>
             <View style={styles.dataLabel}>
@@ -176,13 +190,12 @@ export default function ProfileScreen() {
               <ShellInput value={draftName} onChangeText={setDraftName} accessibilityLabel="Nome" />
             </InputShell>
             <Text style={styles.sheetLabel}>Curso</Text>
-            <InputShell>
-              <ShellInput
-                value={draftCourse}
-                onChangeText={setDraftCourse}
-                accessibilityLabel="Curso"
-              />
-            </InputShell>
+            <CoursePicker value={draftCourse} onChange={setDraftCourse} />
+            <Text style={styles.campusHint}>
+              {draftCampus
+                ? `Campus ${draftCampus} · definido pelo curso`
+                : "Selecione um curso para definir o campus"}
+            </Text>
             <Text style={styles.sheetLabel}>Foto de perfil</Text>
             <Pressable
               onPress={pickPhoto}
@@ -195,15 +208,9 @@ export default function ProfileScreen() {
             <Pressable
               onPress={() => {
                 updateProfile({
-                  name: draftName,
+                  name: draftName.trim() || me.name,
                   course: draftCourse,
-                  initials: draftName
-                    .split(" ")
-                    .filter(Boolean)
-                    .map((part) => part[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase(),
+                  initials: initialsFromName(draftName),
                 });
                 setPanel(null);
               }}
@@ -411,6 +418,7 @@ const styles = {
   },
   sheetTitle: { fontFamily: Fonts.displayExtraBold, fontSize: 20, color: Colors.ink, marginBottom: 8 },
   sheetLabel: { fontFamily: Fonts.bodySemiBold, fontSize: 14, color: Colors.ink, marginBottom: 6, marginTop: 10 },
+  campusHint: { color: Colors.muted, fontSize: 12, fontFamily: Fonts.body, marginTop: 6 },
   sheetText: { color: Colors.muted, fontSize: 15, lineHeight: 22, fontFamily: Fonts.body },
   sheetHeading: { fontFamily: Fonts.displayBold, fontSize: 16, color: Colors.ink, marginTop: 14, marginBottom: 2 },
   photoButton: {

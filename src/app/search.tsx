@@ -18,13 +18,14 @@ import { WeekdayPicker } from "@/components/WeekdayPicker";
 import { ResponsiveRow } from "@/components/ResponsiveRow";
 import { Colors, Fonts } from "@/constants/theme";
 import { fixtureRides } from "@/data";
+import { toLocalDateKey } from "@/lib/format";
 import { useAppStore } from "@/store";
 
 export default function SearchScreen() {
   const router = useRouter();
   const { state } = useAppStore();
   const scrollRef = useRef<ScrollView>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalDateKey(new Date());
   const [activeLeg, setActiveLeg] = useState<"ida" | "volta">("ida");
   const [searched, setSearched] = useState(false);
   const [filter, setFilter] = useState<"desvio" | "preco" | "horario">("desvio");

@@ -22,6 +22,20 @@ const MONTHS_SHORT = [
   "nov.",
   "dez.",
 ] as const;
+const MONTHS_LONG = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+] as const;
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -51,4 +65,16 @@ export function formatWeekdayShortDateBR(date: Date): string {
 
 export function formatWeekdayLongBR(date: Date): string {
   return WEEKDAYS_LONG[date.getDay()];
+}
+
+/** "QUINTA, 26 DE NOVEMBRO" — usado nas saudações das telas iniciais. */
+export function formatFullDateUpperBR(date: Date): string {
+  return `${WEEKDAYS_LONG[date.getDay()].toUpperCase()}, ${pad(date.getDate())} DE ${
+    MONTHS_LONG[date.getMonth()].toUpperCase()
+  }`;
+}
+
+/** Chave `AAAA-MM-DD` no fuso local (nunca UTC, para não trocar o dia). */
+export function toLocalDateKey(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

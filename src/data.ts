@@ -1,5 +1,90 @@
 export type Coordinates = [number, number];
 
+export type CampusId = "I" | "JK";
+
+export type CourseArea = {
+  name: string;
+  courses: string[];
+};
+
+export type CourseGroup = {
+  campus: CampusId;
+  address: string;
+  /** Campus I não é dividido em áreas; Campus JK é. */
+  areas?: CourseArea[];
+  courses?: string[];
+};
+
+/** Catálogo único de cursos da UFVJM/Diamantina, agrupado por campus e área. */
+export const COURSE_CATALOG: CourseGroup[] = [
+  {
+    campus: "I",
+    address: "Centro, Rua da Glória",
+    courses: ["Odontologia"],
+  },
+  {
+    campus: "JK",
+    address: "Rodovia MGT 367, Km 583",
+    areas: [
+      {
+        name: "Agrárias",
+        courses: ["Agronomia", "Engenharia Florestal", "Zootecnia"],
+      },
+      {
+        name: "Saúde e Biológicas",
+        courses: [
+          "Ciências Biológicas",
+          "Educação Física",
+          "Enfermagem",
+          "Farmácia",
+          "Fisioterapia",
+          "Medicina",
+          "Nutrição",
+        ],
+      },
+      {
+        name: "Exatas e Engenharias",
+        courses: [
+          "Ciência e Tecnologia",
+          "Engenharia de Alimentos",
+          "Engenharia Geológica",
+          "Engenharia Mecânica",
+          "Engenharia Química",
+          "Matemática",
+          "Química",
+          "Química Tecnológica",
+          "Sistemas de Informação",
+        ],
+      },
+      {
+        name: "Humanas e Letras",
+        courses: [
+          "Geografia",
+          "História",
+          "Humanidades",
+          "Letras",
+          "Pedagogia",
+          "Políticas Públicas e Gestão Social",
+          "Psicologia",
+          "Turismo",
+        ],
+      },
+    ],
+  },
+];
+
+const COURSE_CAMPUS = new Map<string, CampusId>(
+  COURSE_CATALOG.flatMap((group) => {
+    const courses = [...(group.courses ?? []), ...(group.areas ?? []).flatMap((area) => area.courses)];
+    return courses.map((course): [string, CampusId] => [course, group.campus]);
+  }),
+);
+
+/** Campus derivado do curso — nunca escolhido de forma independente. */
+export function campusForCourse(course: string): CampusId | undefined {
+  return COURSE_CAMPUS.get(course.trim());
+}
+
 export type Rider = {
   id: number;
   name: string;
