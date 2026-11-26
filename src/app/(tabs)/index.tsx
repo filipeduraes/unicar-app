@@ -8,12 +8,14 @@ import { RideCard } from "@/components/RideCard";
 import { TopBar } from "@/components/TopBar";
 import { Colors, Fonts } from "@/constants/theme";
 import { fixtureRides } from "@/data";
+import { formatFullDateUpperBR } from "@/lib/format";
 import { useAppStore } from "@/store";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { state } = useAppStore();
   const [all, setAll] = useState(false);
+  const firstName = state.profile.name.split(" ")[0] || "Estudante";
   const homeRides = [
     ...state.rides.filter((ride) => ride.status === "ativa"),
     ...fixtureRides,
@@ -27,8 +29,8 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 110 }}
       >
         <TopBar
-          title="Bom dia, Gabriel"
-          subtitle="TERÇA, 21 DE MAIO"
+          title={`Bom dia, ${firstName}`}
+          subtitle={formatFullDateUpperBR(new Date())}
           onBell={() => router.push("/notifications")}
         />
 

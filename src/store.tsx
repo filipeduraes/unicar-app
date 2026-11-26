@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { campusForCourse } from "@/data";
 import { formatTimeBR } from "@/lib/format";
 import {
   createContext,
@@ -122,16 +123,17 @@ export type StoreState = {
   preferences: { push: boolean; messages: boolean; rides: boolean; payments: boolean };
 };
 
+/** Valores neutros: nome, e-mail, curso e campus vêm do onboarding. */
 const me: StoreState["profile"] = {
   id: 4,
-  name: "Gabriel Rocha",
-  initials: "GR",
-  course: "Engenharia de Computação",
+  name: "",
+  initials: "",
+  course: "",
   rating: 4.9,
   color: "green",
-  campus: "JK",
+  campus: "",
   address: "Rua da Glória, 187 - Centro",
-  email: "gabriel.rocha@ufvjm.edu.br",
+  email: "",
 };
 
 const initialState: StoreState = {
@@ -152,7 +154,7 @@ const initialState: StoreState = {
       id: 2,
       conversationId: "ride-main",
       senderId: 4,
-      senderName: "Gabriel",
+      senderName: "Você",
       text: "Perfeito! Estarei lá uns 5 min antes.",
       createdAt: "14:04",
       read: true,
@@ -234,7 +236,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then((saved) => {
         if (!cancelled && saved) {
           try {
-            setState({ ...initialState, ...JSON.parse(saved) });
+            const stored = JSON.parse(saved) as Partial<StoreState>;
+            const savedProfile = { ...initialState.profile, ...stored.profile };
+            // Instalações antigas fixavam a identidade do usuário. Descartamos
+            // apenas esses campos para que o onboarding gere nome/curso/campus
+            // a partir do e-mail informado, preservando o restante do PoC.
+            const legacyProfile = !!savedProfile.course && !campusForCourse(savedProfile.course);
+            if (legacyProfile) {
+              savedProfile.name = initialState.profile.name;
+              savedProfile.initials = initialState.profile.initials;
+              savedProfile.email = initialState.profile.email;
+              savedProfile.course = initialState.profile.course;
+              savedProfile.campus = initialState.profile.campus;
+            }
+            setState({
+              ...initialState,
+              ...stored,
+              profile: savedProfile,
+              preferences: { ...initialState.preferences, ...stored.preferences },
+            });
           } catch {
             // corrupted payload — keep initial state
           }
@@ -450,7 +470,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             },
           ],
           notifications:
-            message.senderId === me.id
+            message.senderId === state.profile.id
               ? current.notifications
               : [
                   {
@@ -522,7 +542,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           leftConversationIds: [...new Set([...current.leftConversationIds, conversationId])],
         })),
       updateProfile: (patch) =>
-        setState((current) => ({ ...current, profile: { ...current.profile, ...patch } })),
+        setState((current) => {
+          const profile = { ...current.profile, ...patch };
+          // O campus é sempre consequência do curso selecionado.
+          if (patch.course !== undefined) profile.campus = campusForCourse(profile.course) ?? "";
+          return { ...current, profile };
+        }),
       updatePreferences: (patch) =>
         setState((current) => ({ ...current, preferences: { ...current.preferences, ...patch } })),
     };

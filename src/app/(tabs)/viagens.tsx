@@ -11,7 +11,7 @@ import { TopBar } from "@/components/TopBar";
 import { Colors, Fonts } from "@/constants/theme";
 import { CAMPUS_COORDINATES, coordinatesForPlace, fixtureRides, riders } from "@/data";
 import { useAppStore } from "@/store";
-import { formatShortDateBR } from "@/lib/format";
+import { formatFullDateUpperBR, formatShortDateBR } from "@/lib/format";
 
 const PRIMARY_TABS = ["próximas", "solicitações", "histórico"] as const;
 const SECONDARY_TABS = ["recorrências", "pagamentos"] as const;
@@ -135,7 +135,7 @@ export default function TripsScreen() {
       >
         {section === "próximas" && (
           <>
-            <Text style={styles.dateLabel}>HOJE · 21 DE MAIO</Text>
+            <Text style={styles.dateLabel}>HOJE · {formatFullDateUpperBR(new Date())}</Text>
 
             {state.rides
               .filter((ride) => ride.ownerId === state.profile.id)
@@ -282,8 +282,8 @@ export default function TripsScreen() {
                   destinationCoordinates={coordinatesForPlace("Centro Histórico")}
                   pickups={[
                     {
-                      label: "Ponto de embarque de Gabriel",
-                      initials: "GR",
+                      label: `Ponto de embarque de ${state.profile.name}`,
+                      initials: state.profile.initials,
                       coordinates: [-43.5848, -18.2169],
                     },
                   ]}

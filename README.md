@@ -73,7 +73,7 @@ Se o NDK 27.1.12297006 estiver faltando, o Gradle baixa automaticamente. Isso po
 ### 3. Abrir o projeto e instalar dependências
 
 ```bash
-cd ~/Downloads/Unicar/unicar
+cd ~/unicar-app
 npm install
 ```
 
@@ -84,13 +84,50 @@ npx tsc --noEmit        # checagem de tipos
 npx expo lint           # lint (eslint-config-expo)
 ```
 
-## Rodar em desenvolvimento
+## Comandos rápidos — comece aqui
+
+Primeiro, inicie o emulador em um terminal separado (ou conecte o celular via USB):
+
+```bash
+$ANDROID_HOME/emulator/emulator -avd Medium_Phone   # deixe esta janela aberta
+adb devices                                        # confirme: aparece como "device"
+```
+
+Se `ANDROID_HOME` não estiver definido, use o caminho completo, por exemplo `~/Android/Sdk/emulator/emulator`. O AVD `Medium_Phone` (API 36) pode ser criado no Device Manager do Android Studio.
+
+Com o dispositivo pronto, são dois comandos para o dia a dia:
+
+```bash
+npm run android:dev       # desenvolvimento: dependências, APK debug e Metro
+npm run android:release   # APK de release assinado (universal: celular + emulador)
+```
+
+| Objetivo | Comando | Resultado |
+| --- | --- | --- |
+| Iniciar o emulador | `$ANDROID_HOME/emulator/emulator -avd Medium_Phone` | janela aberta; `adb devices` mostra `emulator-5554` |
+| Desenvolver com Fast Refresh | `npm run android:dev` | instala o app e deixa o Metro aberto; pressione `r` para recarregar |
+| Escolher dispositivo explicitamente | `npm run android:dev -- --device emulator-5554` | útil com vários dispositivos conectados |
+| APK de release para celular | `npm run android:release:arm64` | `app-release.apk` (~57 MB) |
+| Release já instalado via adb | `npm run android:release:install` | desinstala o debug, builda e instala o release |
+| Ver todas as opções | `./scripts/run-android.sh --help` / `./scripts/build-release.sh --help` | ajuda dos scripts |
+
+Os scripts são idempotentes: instalam dependências se faltarem, geram `android/` com `prebuild` **sem `--clean`** e reaproveitam a keystore/senhas de release. O primeiro build pode levar 15–20 min (download do NDK/Gradle); os segundos terminam em menos de 1 min. O comando de desenvolvimento mantém o terminal aberto com o Metro; o de release termina mostrando o caminho do APK:
+
+```
+android/app/build/outputs/apk/release/app-release.apk
+```
+
+> Na primeira vez que o release roda, o script gera uma keystore e imprime as senhas uma única vez: anote e faça backup. Sem ela não é possível atualizar o app mantendo a mesma assinatura.
+
+As formas manuais estão mais abaixo, caso você queira executar cada etapa separadamente.
+
+## Rodar em desenvolvimento (forma manual)
 
 O app usa módulos nativos (MapLibre), então Expo Go não funciona. Use o development build, que já está configurado.
 
 ### 1. Escolher um dispositivo
 
-- Emulador: no Android Studio, abra o Device Manager e crie um `Medium_Phone` com API 36.
+- Emulador: no Android Studio, abra o Device Manager e crie um `Medium_Phone` com API 36. Para iniciar pela linha de comando: `$ANDROID_HOME/emulator/emulator -avd Medium_Phone` (deixe a janela aberta).
 - Aparelho físico: ative as Opções do desenvolvedor, a Depuração USB e a opção "Instalar via USB". Sem isso, o Samsung One UI bloqueia a instalação por USB e mostra o erro `INSTALL_FAILED_USER_RESTRICTED`. Mantenha a tela desbloqueada durante a instalação e toque em "Instalar" quando o diálogo aparecer no celular.
 
 ```bash
@@ -131,10 +168,19 @@ adb logcat -s ReactNativeJS:V
 
 O APK de release já traz o bundle JavaScript embutido. Ele roda sem computador e sem Metro. Mapas e cálculo de rota continuam precisando de internet.
 
-### Script automatizado
+### Forma automática (recomendada)
 
 ```bash
-# fluxo completo: deps, prebuild, keystore, assinatura e assembleRelease
+npm run android:release            # fluxo completo: deps, prebuild, keystore, assinatura e build
+npm run android:release:arm64      # APK só para o celular (~57 MB)
+npm run android:release:install    # build e instalação via adb
+```
+
+### Script direto (sem npm)
+
+Os comandos npm acima chamam este script; use-o se preferir passar flags avançadas:
+
+```bash
 ./scripts/build-release.sh                  # APK universal (arm64 + x86_64)
 ./scripts/build-release.sh --arch arm64     # APK só para o celular (~57 MB)
 ./scripts/build-release.sh --install        # build e instalação via adb (desinstala a versão debug antes)
@@ -249,7 +295,9 @@ unicar/
 ├── app.json                 # configuração do Expo (plugins, ícone, splash, id de pacote)
 ├── package.json             # dependências. SDK 54, não atualizar
 ├── tsconfig.json
-├── scripts/build-release.sh # automatiza assinatura e build de release (--help para opções)
+├── scripts/
+│   ├── run-android.sh       # desenvolvimento em um comando (npm run android:dev)
+│   └── build-release.sh     # assinatura e build de release (npm run android:release)
 ├── README.md                # este arquivo
 ├── AGENTS.md                # guia para agentes de IA (contribuir, testar, corrigir)
 ├── assets/images/           # logos e ícone adaptativo (únicos assets do app)
@@ -275,12 +323,14 @@ unicar/
 ## Verificação
 
 | Verificação | Comando |
-|  |  |
+| --- | --- |
 | TypeScript | `npx tsc --noEmit` |
 | Lint | `npx expo lint` |
 | Bundle JS de produção | `CI=1 npx expo export --platform android` |
-| Build debug e emulador | `npx expo run:android` |
-| Build release | `cd android && ./gradlew :app:assembleRelease` |
+| Desenvolvimento (script) | `npm run android:dev` |
+| Debug + emulador (manual) | `npx expo run:android` |
+| Release (script) | `npm run android:release` |
+| Release (manual) | `cd android && ./gradlew :app:assembleRelease` |
 | Instalar APK | `adb install -r android/app/build/outputs/apk/release/app-release.apk` |
 
 
@@ -290,7 +340,7 @@ unicar/
 - Expo Go não funciona porque o MapLibre é nativo. Use o development build.
 - A versão web não é suportada, pois o MapLibre não roda no export de servidor web. Ela foi removida de `app.json` e `package.json`.
 - iOS está configurado. Não foi verificado por falta de macOS, e a configuração pode precisar de ajustes.
-- Não há backend. Pagamentos, código de verificação (fixo `4-8-2-6`) e dados de terceiros são simulações do PoC. O estado salvo é apenas local.
+- Não há backend. Pagamentos, código de verificação (gerado a cada envio, com preenchimento simulado por ação explícita) e dados de terceiros são simulações do PoC. O estado salvo é apenas local.
 - Mapas precisam de internet para os tiles do OpenFreeMap e o cálculo de rota pelo OSRM. Sem rede, a tela mostra "Rota indisponível" sem travar.
 - Em aparelhos físicos com One UI/Android 16, a instalação só funciona com "Instalar via USB" ativado. `adb shell input tap` é bloqueado, e as capturas de tela funcionam.
 - O SDK do Expo é o 54. O template veio com pacotes da linha 58 misturados e foi realinhado para o SDK 54. Não atualize.

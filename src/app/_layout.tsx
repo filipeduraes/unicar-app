@@ -17,7 +17,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { AuthProvider, useAuth } from "@/auth";
 import { Onboarding } from "@/components/Onboarding";
-import { StoreProvider } from "@/store";
+import { StoreProvider, useAppStore } from "@/store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,7 +45,11 @@ export default function RootLayout() {
 
 function RootNavigator({ ready }: { ready: boolean }) {
   const { logged } = useAuth();
-  const readyToRender = ready && logged !== null;
+  const { state, hydrated } = useAppStore();
+  const readyToRender = ready && logged !== null && hydrated;
+  // Um perfil sem nome precisa passar pelo onboarding para gerar nome,
+  // e-mail, curso e campus a partir do e-mail institucional informado.
+  const needsOnboarding = !logged || !state.profile.name;
 
   useEffect(() => {
     if (readyToRender) {
@@ -55,7 +59,7 @@ function RootNavigator({ ready }: { ready: boolean }) {
 
   if (!readyToRender) return null;
 
-  if (!logged) {
+  if (needsOnboarding) {
     return (
       <>
         <StatusBar style="dark" />

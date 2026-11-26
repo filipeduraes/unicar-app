@@ -44,6 +44,10 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "android:dev": "bash scripts/run-android.sh",
+    "android:release": "bash scripts/build-release.sh",
+    "android:release:arm64": "bash scripts/build-release.sh --arch arm64",
+    "android:release:install": "bash scripts/build-release.sh --arch arm64 --install",
     "ios": "expo run:ios",
     "lint": "expo lint"
   },

@@ -23,7 +23,12 @@ import { ResponsiveRow } from "@/components/ResponsiveRow";
 import { Colors, Fonts } from "@/constants/theme";
 import { CAMPUS_COORDINATES, coordinatesForPlace, type Coordinates } from "@/data";
 import { useAppStore } from "@/store";
-import { formatDateBR, formatShortDateBR, formatWeekdayShortDateBR } from "@/lib/format";
+import {
+  formatDateBR,
+  formatShortDateBR,
+  formatWeekdayShortDateBR,
+  toLocalDateKey,
+} from "@/lib/format";
 
 const STEPS = ["Trajeto", "Agenda", "Detalhes", "Revisão"] as const;
 
@@ -31,8 +36,8 @@ export default function OfferScreen() {
   const router = useRouter();
   const { state, addRide } = useAppStore();
   const insets = useSafeAreaInsets();
-  const today = new Date().toISOString().slice(0, 10);
-  const defaultRecurrenceEnd = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const today = toLocalDateKey(new Date());
+  const defaultRecurrenceEnd = toLocalDateKey(new Date(Date.now() + 30 * 86400000));
   const [step, setStep] = useState(1);
   const [recurring, setRecurring] = useState(false);
   const [returnRecurring, setReturnRecurring] = useState(false);
@@ -90,7 +95,7 @@ export default function OfferScreen() {
         if (!isRecurring || selectedDays.includes(weekdayIndex)) {
           occurrences.push({
             id: Date.now() + occurrences.length,
-            date: cursor.toISOString().slice(0, 10),
+            date: toLocalDateKey(cursor),
             driverConfirmed: false,
             passengerConfirmed: false,
             status: "agendada" as const,
