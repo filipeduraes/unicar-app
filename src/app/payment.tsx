@@ -79,6 +79,16 @@ export default function PaymentScreen() {
   const setStatus = (next: PaymentState) => setPayment(ride.id, next, method);
   const info = statusInfo(status, amount);
 
+  // O pagamento só é liberado depois que o motorista aprova a solicitação. Pagamentos já
+  // iniciados/concluídos continuam visíveis (recibo, reembolso).
+  const request = state.requests.find(
+    (item) => item.rideId === ride.id && item.passenger.id === state.profile.id,
+  );
+  const locked =
+    request?.status !== "aprovada" && (status === "aguardando" || status === "recusado");
+  const awaitingApproval = request?.status === "pendente";
+  const lockedTone: Tone = awaitingApproval ? "processing" : "waiting";
+
   // Simulação: o "processamento" conclui sozinho depois de alguns segundos.
   useEffect(() => {
     if (status !== "processando") return;
@@ -160,7 +170,28 @@ export default function PaymentScreen() {
           </View>
         </View>
 
-        {status !== "aguardando" ? (
+        {locked ? (
+          <View style={styles.stateContainer}>
+            <View style={[styles.stateIcon, toneStyle(lockedTone)]}>
+              <Icon
+                name={awaitingApproval ? "clock" : "shield"}
+                size={35}
+                color={toneIcon(lockedTone)}
+              />
+            </View>
+            <Text style={styles.stateTitle}>Pagamento ainda não liberado</Text>
+            <Text style={styles.stateText}>
+              {awaitingApproval
+                ? `Sua solicitação está aguardando a aprovação de ${driverFirstName}. Assim que ela for aprovada, você poderá pagar por aqui.`
+                : `Para pagar, solicite uma vaga nesta carona e aguarde a aprovação de ${driverFirstName}.`}
+            </Text>
+            <PrimaryButton
+              title="Voltar para a carona"
+              onPress={goBackToRide}
+              style={{ alignSelf: "stretch", marginTop: 8 }}
+            />
+          </View>
+        ) : status !== "aguardando" ? (
           <View style={styles.stateContainer}>
             <View style={[styles.stateIcon, toneStyle(info.tone)]}>
               <Icon

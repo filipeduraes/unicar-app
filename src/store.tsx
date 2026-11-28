@@ -179,6 +179,66 @@ const initialState: StoreState = {
   preferences: { push: true, messages: true, rides: true, payments: true },
 };
 
+/**
+ * Aplica um novo status a uma solicitação, ajustando vagas/passageiros da carona e
+ * gerando a notificação correspondente. Usado pelo motorista (aba Solicitações) e
+ * pela aprovação simulada do PoC.
+ */
+function withRequestStatus(
+  current: StoreState,
+  requestId: number,
+  status: StoredRequest["status"],
+): StoreState {
+  const request = current.requests.find((item) => item.id === requestId);
+  const rides = current.rides.map((ride) => {
+    if (!request || ride.id !== request.rideId) return ride;
+    if (
+      status === "aprovada" &&
+      !ride.passengers.some((person) => person.id === request.passenger.id)
+    )
+      return {
+        ...ride,
+        seats: Math.max(0, ride.seats - 1),
+        passengers: [...ride.passengers, request.passenger],
+      };
+    if (
+      status === "cancelada" &&
+      ride.passengers.some((person) => person.id === request.passenger.id)
+    )
+      return {
+        ...ride,
+        seats: Math.min(ride.totalSeats, ride.seats + 1),
+        passengers: ride.passengers.filter((person) => person.id !== request.passenger.id),
+      };
+    return ride;
+  });
+  return {
+    ...current,
+    rides,
+    requests: current.requests.map((item) =>
+      item.id === requestId ? { ...item, status } : item,
+    ),
+    notifications: request
+      ? [
+          {
+            id: Date.now(),
+            title:
+              status === "aprovada"
+                ? "Solicitação aprovada"
+                : status === "recusada"
+                  ? "Solicitação recusada"
+                  : "Solicitação atualizada",
+            text: `O estado da participação agora é: ${status}.`,
+            createdAt: "agora",
+            read: false,
+            target: "details",
+          },
+          ...current.notifications,
+        ]
+      : current.notifications,
+  };
+}
+
 type StoreApi = {
   state: StoreState;
   hydrated: boolean;
@@ -207,6 +267,8 @@ type StoreApi = {
 
 const StoreContext = createContext<StoreApi | null>(null);
 const STORAGE_KEY = "unicar-poc-state-v1";
+/** PoC sem backend: o motorista "aprova" a solicitação sozinho depois deste intervalo. */
+const APPROVAL_DELAY_MS = 5000;
 const LOGGED_KEY = "unicar-poc-logged";
 
 export const authStorage = {
@@ -297,6 +359,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Simulação: solicitações do usuário em caronas de outros motoristas são aprovadas
+  // automaticamente após alguns segundos (inclusive as que ficaram pendentes ao fechar o app).
+  const pendingApprovalKey = state.requests
+    .filter(
+      (request) =>
+        request.status === "pendente" &&
+        request.passenger.id === state.profile.id &&
+        !state.rides.some(
+          (ride) => ride.id === request.rideId && ride.ownerId === state.profile.id,
+        ),
+    )
+    .map((request) => request.id)
+    .join(",");
+
+  useEffect(() => {
+    if (!hydrated || !pendingApprovalKey) return;
+    const timer = setTimeout(() => {
+      setState((current) =>
+        pendingApprovalKey
+          .split(",")
+          .map(Number)
+          .reduce(
+            (next, requestId) =>
+              next.requests.some((item) => item.id === requestId && item.status === "pendente")
+                ? withRequestStatus(next, requestId, "aprovada")
+                : next,
+            current,
+          ),
+      );
+    }, APPROVAL_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [hydrated, pendingApprovalKey]);
+
   const api = useMemo<StoreApi>(() => {
     const notify = (notification: Omit<StoredNotification, "id" | "createdAt" | "read">) =>
       setState((current) => ({
@@ -381,56 +476,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return request;
       },
       updateRequest: (requestId, status) =>
-        setState((current) => {
-          const request = current.requests.find((item) => item.id === requestId);
-          const rides = current.rides.map((ride) => {
-            if (!request || ride.id !== request.rideId) return ride;
-            if (
-              status === "aprovada" &&
-              !ride.passengers.some((person) => person.id === request.passenger.id)
-            )
-              return {
-                ...ride,
-                seats: Math.max(0, ride.seats - 1),
-                passengers: [...ride.passengers, request.passenger],
-              };
-            if (
-              status === "cancelada" &&
-              ride.passengers.some((person) => person.id === request.passenger.id)
-            )
-              return {
-                ...ride,
-                seats: Math.min(ride.totalSeats, ride.seats + 1),
-                passengers: ride.passengers.filter((person) => person.id !== request.passenger.id),
-              };
-            return ride;
-          });
-          return {
-            ...current,
-            rides,
-            requests: current.requests.map((item) =>
-              item.id === requestId ? { ...item, status } : item,
-            ),
-            notifications: request
-              ? [
-                  {
-                    id: Date.now(),
-                    title:
-                      status === "aprovada"
-                        ? "Solicitação aprovada"
-                        : status === "recusada"
-                          ? "Solicitação recusada"
-                          : "Solicitação atualizada",
-                    text: `O estado da participação agora é: ${status}.`,
-                    createdAt: "agora",
-                    read: false,
-                    target: "details",
-                  },
-                  ...current.notifications,
-                ]
-              : current.notifications,
-          };
-        }),
+        setState((current) => withRequestStatus(current, requestId, status)),
       updateOccurrence: (rideId, occurrenceId, patch) =>
         setState((current) => ({
           ...current,

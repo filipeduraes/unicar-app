@@ -48,8 +48,11 @@ export default function RideDetailsScreen() {
   const storedRequest = state.requests.find(
     (request) => request.rideId === id && request.passenger.id === state.profile.id,
   );
-  const requested =
-    storedRequest?.status === "pendente" || storedRequest?.status === "aprovada";
+  const pending = storedRequest?.status === "pendente";
+  const approved = storedRequest?.status === "aprovada";
+  const requested = pending || approved;
+  const paymentStatus = state.payments[`ride-${ride.id}`] ?? "aguardando";
+  const driverFirstName = ride.driver.name.split(" ")[0];
   const [safetyMessage, setSafetyMessage] = useState("");
   const [waitlisted, setWaitlisted] = useState(false);
   const [showDriverProfile, setShowDriverProfile] = useState(false);
@@ -213,22 +216,47 @@ export default function RideDetailsScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <Text style={styles.sectionTitle}>Pagamento</Text>
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: "/payment",
-                    params: { id: String(ride.id), from: "ride" },
-                  })
-                }
-                accessibilityRole="button"
-              >
-                <Text style={styles.sectionAction}>Ver divisão e pagar</Text>
-              </Pressable>
+              {approved ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/payment",
+                      params: { id: String(ride.id), from: "ride" },
+                    })
+                  }
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.sectionAction}>
+                    {paymentStatus === "aguardando" || paymentStatus === "recusado"
+                      ? "Ver divisão e pagar"
+                      : "Ver pagamento"}
+                  </Text>
+                </Pressable>
+              ) : pending ? (
+                <View style={styles.waitingPill}>
+                  <Icon name="clock" size={13} color={Colors.amberInk} />
+                  <Text style={styles.waitingPillText}>Aguardando aprovação</Text>
+                </View>
+              ) : null}
             </View>
-            <Text style={styles.noteText}>
-              {formatCurrencyBR(split.total)} de combustível dividido entre {split.people} pessoas:{" "}
-              {formatCurrencyBR(split.perPerson)} por pessoa.
-            </Text>
+            {approved ? (
+              <Text style={styles.noteText}>
+                {formatCurrencyBR(split.total)} de combustível dividido entre {split.people}{" "}
+                pessoas: {formatCurrencyBR(split.perPerson)} por pessoa.
+              </Text>
+            ) : (
+              <View style={styles.paymentLocked}>
+                <Text numberOfLines={1}>
+                  <Text style={styles.paymentLockedValue}>{formatCurrencyBR(split.perPerson)}</Text>
+                  <Text style={styles.priceSmall}> por pessoa</Text>
+                </Text>
+                <Text style={styles.paymentLockedText}>
+                  {pending
+                    ? `Solicitação enviada. O pagamento é liberado quando ${driverFirstName} aprovar sua solicitação.`
+                    : `O pagamento é liberado quando ${driverFirstName} aprovar sua solicitação.`}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.section}>
@@ -346,7 +374,7 @@ export default function RideDetailsScreen() {
           </View>
           <Text style={styles.sheetTitle}>Solicitar esta carona?</Text>
           <Text style={styles.sheetText}>
-            {ride.driver.name.split(" ")[0]} receberá sua solicitação e poderá aprovar sua
+            {driverFirstName} receberá sua solicitação e poderá aprovar sua
             participação.
           </Text>
           <View style={styles.requestSummary}>
@@ -360,7 +388,9 @@ export default function RideDetailsScreen() {
             </View>
             <View style={styles.requestSummaryRow}>
               <Icon name="card" size={18} color={Colors.muted} />
-              <Text style={styles.requestSummaryText}>R$ {ride.price},00</Text>
+              <Text style={styles.requestSummaryText}>
+                R$ {ride.price},00 · pago após a aprovação
+              </Text>
             </View>
           </View>
           <PrimaryButton
@@ -547,6 +577,24 @@ const styles = {
     borderRadius: 12,
     padding: 12,
   },
+  waitingPill: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    backgroundColor: Colors.amberSoft,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  waitingPillText: { color: Colors.amberInk, fontFamily: Fonts.bodyBold, fontSize: 12 },
+  paymentLocked: {
+    backgroundColor: Colors.graySoft,
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+  },
+  paymentLockedValue: { fontFamily: Fonts.displayExtraBold, fontSize: 20, color: Colors.ink },
+  paymentLockedText: { color: Colors.muted, fontSize: 14, lineHeight: 20, fontFamily: Fonts.body },
   safetyActions: { flexDirection: "row" as const, gap: 18 },
   safetyLink: { paddingVertical: 4 },
   safetyLinkText: { color: Colors.error, fontFamily: Fonts.bodySemiBold, fontSize: 14 },
